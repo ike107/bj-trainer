@@ -2,7 +2,7 @@ import random
 import streamlit as st
 
 # --- 定数定義 ---
-BET_AMOUNT = 1000
+BET_AMOUNT = 10000
 
 CARD_VALUES = {
     "A": 11,
