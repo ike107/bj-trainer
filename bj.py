@@ -10,7 +10,7 @@ CARD_VALUES = {
 
 # --- 関数定義: ストラテジー判定 ---
 def get_correct_action(player_cards, dealer_up_card):
-    """ベーシックストラテジーに基づく正解アクションを返す (H:ヒット, S:スタンド, D:ダブル, P:スプリット)"""
+    """ベーシックストラテジーに基づく正解アクションを返す"""
     d_val = CARD_VALUES[dealer_up_card]
     
     # 1. ペアハンドの判定
@@ -30,19 +30,17 @@ def get_correct_action(player_cards, dealer_up_card):
     total = sum(values)
     ace_count = player_cards.count('A')
     
-    # Aを1に変換する処理（バースト防止）
     while total > 21 and ace_count > 0:
         total -= 10
         ace_count -= 10
 
-    # 2. ソフトハンドの判定 (Aを11として数えている場合)
+    # 2. ソフトハンドの判定
     if ace_count > 0 and total <= 21:
         other_total = total - 11
         if other_total >= 8: return 'S'
         elif other_total == 7: return 'D' if d_val <= 6 else 'S' if d_val in [7, 8] else 'H'
         elif other_total == 6: return 'D' if d_val <= 6 else 'H'
         elif other_total in [4, 5]: return 'D' if d_val in [4, 5, 6] else 'H'
-        # 【修正箇所】文字列から数値 [2, 3] へ変更して正しく判定されるように修正
         elif other_total in [2, 3]: return 'D' if d_val in [5, 6] else 'H'
 
     # 3. ハードハンドの判定
@@ -51,18 +49,16 @@ def get_correct_action(player_cards, dealer_up_card):
     elif total == 15: return 'S' if d_val <= 6 else 'H'
     elif total == 14: return 'S' if d_val <= 6 else 'H'
     elif total == 13: return 'S' if d_val <= 6 else 'H'
-    elif total == 12: return 'S' if d_val in [4, 5, 6] else 'H'
+    elif total == 12: return 'S' if d_val in [4, 5, 6] else 'H'  # 2,3はHになるロジック
     elif total == 11: return 'D'
     elif total == 10: return 'D' if d_val <= 9 else 'H'
     elif total == 9: return 'D' if d_val <= 6 else 'H'
     else: return 'H'
 
 def draw_card():
-    """常に1/13の確率でカードをランダムに引く"""
     return random.choice(list(CARD_VALUES.keys()))
 
 def calculate_total(cards):
-    """手札の合計値を計算（Aの調整あり）"""
     total = sum(CARD_VALUES[c] for c in cards)
     ace_count = cards.count('A')
     while total > 21 and ace_count > 0:
@@ -70,8 +66,35 @@ def calculate_total(cards):
         ace_count -= 1
     return total
 
+def generate_hard_mode_hand():
+    """特訓モード用の手札（12〜16のハードハンドを除外）"""
+    while True:
+        c1, c2 = draw_card(), draw_card()
+        cards = [c1, c2]
+        total = calculate_total(cards)
+        
+        # パターンA：迷うペアハンド (9,9 / 7,7 / 6,6 / 4,4)
+        if c1 == c2 and c1 in ['9', '7', '6', '4']:
+            return cards
+            
+        if c1 == c2:
+            continue
+            
+        # パターンB：ソフトハンド（Aベースの手：A,8以上は除く）
+        if 'A' in cards:
+            if total < 19:
+                return cards
+            continue
+
 # --- Streamlit 画面構築 ---
 st.title("🃏 BJstg")
+
+# モード選択
+mode = st.radio(
+    "🎲 プレイモードを選択",
+    ["通常モード（完全ランダム）", "特訓モード（難問・嫌な手札限定）"],
+    horizontal=True
+)
 
 # セッション状態の初期化
 if "total_profit" not in st.session_state: st.session_state.total_profit = 0
@@ -85,7 +108,12 @@ if "game_status" not in st.session_state: st.session_state.game_status = "init"
 # 新しいゲームの開始
 if st.session_state.game_status == "init":
     st.session_state.dealer_hand = [draw_card(), draw_card()]
-    st.session_state.player_hands = [[draw_card(), draw_card()]]
+    
+    if "特訓モード" in mode:
+        st.session_state.player_hands = [generate_hard_mode_hand()]
+    else:
+        st.session_state.player_hands = [[draw_card(), draw_card()]]
+        
     st.session_state.hand_bets = [BET_AMOUNT]
     st.session_state.current_hand_idx = 0
     st.session_state.history = []
@@ -116,9 +144,11 @@ with st.expander("📊 ストラテジー表を確認（カンペ）"):
     columns = ["自分の手", "2", "3", "4", "5", "6", "7", "8", "9", "10", "A"]
     
     st.markdown("### 【ハードハンド】（ペア・Aなし）")
+    # 【修正箇所】12を独立させ、2,3に対して「H」となるよう表を修正
     hard_data = [
         ["17以上", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S"],
-        ["12-16", "S", "S", "S", "S", "S", "H", "H", "H", "H", "H"],
+        ["13-16", "S", "S", "S", "S", "S", "H", "H", "H", "H", "H"],
+        ["12",    "H", "H", "S", "S", "S", "H", "H", "H", "H", "H"],
         ["11", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D"],
         ["10", "D", "D", "D", "D", "D", "D", "D", "D", "H", "H"],
         ["9", "H", "D", "D", "D", "D", "H", "H", "H", "H", "H"],
@@ -181,7 +211,7 @@ if st.session_state.game_status == "player_turn":
     col1, col2, col3, col4 = st.columns(4)
     
     allow_split = len(current_hand) == 2 and current_hand[0] == current_hand[1]
-    allow_double = len(current_hand) == 2 
+    allow_double = (len(current_hand) == 2)
 
     action = None
     with col1:
