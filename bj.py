@@ -42,6 +42,7 @@ def get_correct_action(player_cards, dealer_up_card):
         elif other_total == 7: return 'D' if d_val <= 6 else 'S' if d_val in [7, 8] else 'H'
         elif other_total == 6: return 'D' if d_val <= 6 else 'H'
         elif other_total in [4, 5]: return 'D' if d_val in [4, 5, 6] else 'H'
+        # 【修正箇所】文字列から数値 [2, 3] へ変更して正しく判定されるように修正
         elif other_total in [2, 3]: return 'D' if d_val in [5, 6] else 'H'
 
     # 3. ハードハンドの判定
@@ -70,7 +71,7 @@ def calculate_total(cards):
     return total
 
 # --- Streamlit 画面構築 ---
-st.title("BJstg")
+st.title("🃏 BJstg")
 
 # セッション状態の初期化
 if "total_profit" not in st.session_state: st.session_state.total_profit = 0
@@ -109,6 +110,45 @@ if st.sidebar.button("データをリセット"):
     st.session_state.correct_actions = 0
     st.rerun()
 
+# --- ストラテジー表の表示機能 ---
+with st.expander("📊 ストラテジー表を確認（カンペ）"):
+    st.markdown("※ **H**: ヒット / **S**: スタンド / **D**: ダブルダウン / **P**: スプリット")
+    columns = ["自分の手", "2", "3", "4", "5", "6", "7", "8", "9", "10", "A"]
+    
+    st.markdown("### 【ハードハンド】（ペア・Aなし）")
+    hard_data = [
+        ["17以上", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S"],
+        ["12-16", "S", "S", "S", "S", "S", "H", "H", "H", "H", "H"],
+        ["11", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D"],
+        ["10", "D", "D", "D", "D", "D", "D", "D", "D", "H", "H"],
+        ["9", "H", "D", "D", "D", "D", "H", "H", "H", "H", "H"],
+        ["8以下", "H", "H", "H", "H", "H", "H", "H", "H", "H", "H"]
+    ]
+    st.table([dict(zip(columns, row)) for row in hard_data])
+    
+    st.markdown("### 【ソフトハンド】（Aベースの手札）")
+    soft_data = [
+        ["A,8以上", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S"],
+        ["A,7", "S", "D", "D", "D", "D", "S", "S", "H", "H", "H"],
+        ["A,6", "H", "D", "D", "D", "D", "H", "H", "H", "H", "H"],
+        ["A,4 / A,5", "H", "H", "D", "D", "D", "H", "H", "H", "H", "H"],
+        ["A,2 / A,3", "H", "H", "H", "D", "D", "H", "H", "H", "H", "H"]
+    ]
+    st.table([dict(zip(columns, row)) for row in soft_data])
+    
+    st.markdown("### 【ペア】（スプリット判断）")
+    pair_data = [
+        ["A,A / 8,8", "P", "P", "P", "P", "P", "P", "P", "P", "P", "P"],
+        ["10,10", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S"],
+        ["9,9", "P", "P", "P", "P", "P", "S", "P", "P", "S", "S"],
+        ["7,7", "P", "P", "P", "P", "P", "P", "H", "H", "H", "H"],
+        ["6,6", "P", "P", "P", "P", "P", "H", "H", "H", "H", "H"],
+        ["5,5", "D", "D", "D", "D", "D", "D", "D", "D", "H", "H"],
+        ["4,4", "H", "H", "H", "P", "P", "H", "H", "H", "H", "H"],
+        ["2,2 / 3,3", "P", "P", "P", "P", "P", "P", "H", "H", "H", "H"]
+    ]
+    st.table([dict(zip(columns, row)) for row in pair_data])
+
 # 盤面の表示
 dealer_up = st.session_state.dealer_hand[0]
 st.subheader("【ディーラーのアップカード】")
@@ -141,7 +181,6 @@ if st.session_state.game_status == "player_turn":
     col1, col2, col3, col4 = st.columns(4)
     
     allow_split = len(current_hand) == 2 and current_hand[0] == current_hand[1]
-    # 【修正ポイント】スプリット後の手札(2枚)でもダブルダウンを許可するよう条件変更
     allow_double = len(current_hand) == 2 
 
     action = None
@@ -184,7 +223,6 @@ if st.session_state.game_status == "player_turn":
         elif action == "D":
             st.session_state.hand_bets[idx] *= 2
             current_hand.append(draw_card())
-            # ダブルは1枚引いて強制終了なので、次の手札へ進むかディーラーターンへ
             if idx + 1 < len(st.session_state.player_hands):
                 st.session_state.current_hand_idx += 1
             else:
@@ -193,12 +231,10 @@ if st.session_state.game_status == "player_turn":
 
         elif action == "P":
             card1, card2 = current_hand[0], current_hand[1]
-            # 既存の賭け金配列を拡張
             current_bet = st.session_state.hand_bets[idx]
             st.session_state.player_hands.pop(idx)
             st.session_state.hand_bets.pop(idx)
             
-            # 分割した2つの手を同じインデックス位置に挿入
             st.session_state.player_hands.insert(idx, [card2, draw_card()])
             st.session_state.hand_bets.insert(idx, current_bet)
             st.session_state.player_hands.insert(idx, [card1, draw_card()])
